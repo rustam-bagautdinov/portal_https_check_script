@@ -1,0 +1,53 @@
+/system script
+add dont-require-permissions=no name=check_portal owner=admin policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive source="
+:global portalFailCnt
+:global portalStatus
+
+:if ([:len $portalFailCnt] = 0) do={ :set portalFailCnt 0 }
+:if ([:len $portalStatus] = 0) do={ :set portalStatus "UP" }
+
+:local targetUrl "https://192.168.0.1/"
+:local vkToken "--- TOKEN ---"
+:local peerID "2000001111"
+:local sysName [/system identity get name]
+
+:local checkResult false
+:do {
+    /tool fetch mode=https url=$targetUrl keep-result=no
+    :set checkResult true
+} on-error={
+    :set checkResult false
+}
+
+:if ($checkResult = false) do={
+    :set portalFailCnt ($portalFailCnt + 1)
+
+    :if ($portalFailCnt >= 3 && $portalStatus = "UP") do={
+        :set portalStatus "DOWN"
+        :log error "PORTAL is DOWN! Sending VK notification..."
+
+        :local msg ($sysName . "%20PORTAL%20DOWN")
+        :local vkUrl ("https://api.vk.com/method/messages.send?access_token=" . $vkToken . "&v=5.199&peer_id=" . $peerID . "&random_id=0&message=" . $msg)
+
+        :do {
+            /tool fetch mode=https url=$vkUrl keep-result=no
+        } on-error={
+            :log error "Failed to send VK DOWN alert"
+        }
+    }
+} else={
+    :if ($portalStatus = "DOWN") do={
+        :set portalStatus "UP"
+        :log info "PORTAL is UP! Sending VK notification..."
+
+        :local msg ($sysName . "%20PORTAL%20UP")
+        :local vkUrl ("https://api.vk.com/method/messages.send?access_token=" . $vkToken . "&v=5.199&peer_id=" . $peerID . "&random_id=0&message=" . $msg)
+
+        :do {
+            /tool fetch mode=https url=$vkUrl keep-result=no
+        } on-error={
+            :log error "Failed to send VK UP alert"
+        }
+    }
+    :set portalFailCnt 0
+}"
